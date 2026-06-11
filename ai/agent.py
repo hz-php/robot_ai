@@ -62,8 +62,49 @@ class AIAgent:
 
         if "запомни меня" in t:
             self.voice.speak("Начинаю обучение")
-            self.vision.create_dataset(self.vision.session.current_user_id)
-            self._finish()
+            self.vision.status = "TRAINING..."
+
+            def train():
+                try:
+                    self.vision.create_dataset(self.vision.session.current_user_id)
+                    self.voice.speak("Обучение завершено! Теперь я тебя узнаю")
+                except Exception as e:
+                    print(f"[TRAINING ERROR] {e}")
+                    self.voice.speak("Ошибка при обучении")
+                finally:
+                    self.vision.status = "IDLE"
+                    self._finish()
+
+            threading.Thread(target=train, daemon=True).start()
+            return
+
+        if "запомни мой голос" in t:
+            self.voice.speak("Начинаю запись голоса")
+            self.vision.status = "VOICE_TRAINING..."
+
+            def train_voice():
+                try:
+                    current_user = self.vision.session.current_user_id
+                    if not current_user:
+                        self.voice.speak("Сначала мне нужно вас узнать по лицу")
+                        self._finish()
+                        return
+
+                    success = self.voice.record_voice_training(current_user, sample_count=5)
+
+                    if success:
+                        self.voice.speak("Запомнил ваш голос! Теперь я узнаю вас и по голосу")
+                    else:
+                        self.voice.speak("Ошибка при записи голоса")
+
+                except Exception as e:
+                    print(f"[VOICE TRAINING ERROR] {e}")
+                    self.voice.speak("Ошибка при обучении голосу")
+                finally:
+                    self.vision.status = "IDLE"
+                    self._finish()
+
+            threading.Thread(target=train_voice, daemon=True).start()
             return
 
         # =========================

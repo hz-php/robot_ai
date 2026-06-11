@@ -1,0 +1,11 @@
+opencv-python
+sqlalchemy
+pymysql
+ollama
+edge-tts
+SpeechRecognition
+pygame
+librosa
+soundfile
+scipy
+numpy

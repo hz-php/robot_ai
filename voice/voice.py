@@ -5,6 +5,16 @@ import pygame
 import edge_tts
 import speech_recognition as sr
 import asyncio
+import numpy as np
+
+VOICE_RECOGNITION_AVAILABLE = False
+VoiceRecognizer = None
+
+try:
+    import librosa
+    VOICE_RECOGNITION_AVAILABLE = True
+except ImportError:
+    print("[WARNING] librosa not installed - voice recognition disabled")
 
 
 class NeuroVoice:
@@ -23,6 +33,9 @@ class NeuroVoice:
 
         # state lock (анти спам)
         self.is_listening = False
+
+        # 🎤 Voice Recognition Engine (lazy load)
+        self.voice_recognizer = None
 
     # =====================================================
     # SPEAK (TTS FIXED + SAFE)
@@ -48,9 +61,10 @@ class NeuroVoice:
             pygame.mixer.music.load(filename)
             pygame.mixer.music.play()
 
-            # pygame.mixer.music.play()
+            # ✅ Wait for playback to finish
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.1)
 
-            pygame.mixer.music.stop()
             pygame.mixer.music.unload()
 
             # 🔥 Windows file lock protection
@@ -77,6 +91,15 @@ class NeuroVoice:
         def callback(recognizer, audio):
 
             try:
+                # 🎤 Try to recognize speaker first
+                try:
+                    user_id, confidence = self.recognize_speaker(audio.get_raw_data())
+                    if user_id:
+                        print(f"[VOICE AUTH] Recognized user {user_id} (confidence: {confidence:.2f})")
+                except Exception as e:
+                    print(f"[VOICE RECOGNITION] {e}")
+
+                # 📝 Then recognize speech
                 text = recognizer.recognize_google(
                     audio,
                     language="ru-RU"
@@ -98,7 +121,7 @@ class NeuroVoice:
         with mic as source:
             self.recognizer.adjust_for_ambient_noise(source)
 
-        self.recognizer.listen_in_background(mic, callback)
+        self.stop_listening_fn = self.recognizer.listen_in_background(mic, callback)
 
         print("[AI] Voice active")
 
@@ -127,3 +150,95 @@ class NeuroVoice:
 
         except Exception:
             return None
+
+    # =====================================================
+    # RECORD VOICE TRAINING (SPEAKER RECOGNITION)
+    # =====================================================
+    def record_voice_training(self, user_id, sample_count=5):
+        """
+        Запись голосовых образцов для обучения
+
+        Args:
+            user_id: ID пользователя
+            sample_count: количество образцов для записи
+        """
+
+        if not VOICE_RECOGNITION_AVAILABLE:
+            print("[VOICE ERROR] librosa not installed - voice recognition unavailable")
+            return False
+
+        # Lazy load VoiceRecognizer
+        if self.voice_recognizer is None:
+            from voice.voice_recognizer import VoiceRecognizer
+            self.voice_recognizer = VoiceRecognizer()
+
+        print(f"[VOICE TRAINING] Starting recording {sample_count} samples...")
+
+        recorded = 0
+
+        for i in range(sample_count):
+
+            try:
+                with sr.Microphone() as source:
+
+                    print(f"[VOICE] Recording sample {i+1}/{sample_count}... Speak now!")
+
+                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+
+                    # Запись 3-5 секунд
+                    audio = self.recognizer.listen(source, timeout=5)
+
+                    # Преобразование в numpy array
+                    audio_data = np.frombuffer(audio.get_raw_data(), dtype=np.int16).astype(float) / 32768.0
+
+                    # Сохранение образца
+                    self.voice_recognizer.record_voice_sample(audio_data, user_id)
+
+                    recorded += 1
+
+                    print(f"[VOICE] Sample {i+1} recorded ✅")
+
+                    time.sleep(0.5)
+
+            except sr.RequestError:
+                print(f"[VOICE ERROR] API error on sample {i+1}")
+                continue
+
+            except sr.UnknownValueError:
+                print(f"[VOICE ERROR] Could not understand audio for sample {i+1}, retrying...")
+                continue
+
+            except Exception as e:
+                print(f"[VOICE ERROR] {e}")
+                continue
+
+        if recorded >= 2:
+            print(f"[VOICE TRAINING] Recorded {recorded} samples. Training model...")
+            self.voice_recognizer.train_speaker(user_id)
+            return True
+        else:
+            print(f"[VOICE TRAINING ERROR] Only {recorded} samples recorded, need at least 2")
+            return False
+
+    # =====================================================
+    # RECOGNIZE SPEAKER FROM AUDIO
+    # =====================================================
+    def recognize_speaker(self, audio_data):
+        """
+        Распознавание говорящего из аудио
+
+        Args:
+            audio_data: raw audio data
+
+        Returns:
+            (user_id, confidence) или (None, 0)
+        """
+
+        if not VOICE_RECOGNITION_AVAILABLE or self.voice_recognizer is None:
+            return None, 0
+
+        audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(float) / 32768.0
+
+        user_id, confidence = self.voice_recognizer.recognize_speaker(audio_array, sr=16000)
+
+        return user_id, confidence
