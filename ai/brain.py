@@ -3,19 +3,41 @@ import ollama
 
 class Brain:
 
-    def __init__(self):
+    def __init__(self, username="Unknown"):
 
+        self.username = username
         self.history = []
 
         self.history.append({
             "role": "system",
             "content": (
-                "Ты AI-ассистент уровня ChatGPT. "
-                "Ты НЕ выполняешь команды напрямую. "
-                "Ты можешь вернуть TOOL JSON если нужно действие. "
-                "Иначе отвечай как обычный ассистент."
+                f"Ты AI-ассистент уровня ChatGPT. "
+                f"Обращайся к пользователю по имени {username}. "
+                f"Ты НЕ выполняешь команды напрямую. "
+                f"Ты можешь вернуть TOOL JSON если нужно действие. "
+                f"Иначе отвечай как обычный ассистент, дружелюбно, на русском языке."
             )
         })
+
+    # =========================
+    # SET USER NAME
+    # =========================
+    def set_username(self, username):
+        """Обновление имени пользователя"""
+        
+        self.username = username
+        
+        # Обновляем system prompt с новым именем
+        self.history[0] = {
+            "role": "system",
+            "content": (
+                f"Ты AI-ассистент уровня ChatGPT. "
+                f"Обращайся к пользователю по имени {username}. "
+                f"Ты НЕ выполняешь команды напрямую. "
+                f"Ты можешь вернуть TOOL JSON если нужно действие. "
+                f"Иначе отвечай как обычный ассистент, дружелюбно, на русском языке."
+            )
+        }
 
     # =========================
     # THINK
@@ -25,7 +47,7 @@ class Brain:
         message = {
             "role": "user",
             "content": f"""
-Пользователь: {user_text}
+Пользователь {self.username}: {user_text}
 Телеметрия: {telemetry}
 
 Если нужна команда — верни JSON:
@@ -33,7 +55,7 @@ class Brain:
   "tool": "take_photo"
 }}
 
-Иначе просто ответ.
+Иначе просто ответ на русском.
 """
         }
 

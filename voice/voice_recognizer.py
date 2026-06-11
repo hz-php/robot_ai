@@ -1,5 +1,4 @@
 import os
-import json
 import numpy as np
 import librosa
 import soundfile as sf
@@ -15,38 +14,16 @@ class VoiceRecognizer:
     - Speaker verification
     """
 
-    def __init__(self, db_path="voices/voice_models"):
+    def __init__(self, db=None, voice_repo=None, db_path="voices/voice_samples"):
 
+        self.db = db
+        self.voice_repo = voice_repo
         self.db_path = db_path
         os.makedirs(db_path, exist_ok=True)
-
-        self.voice_profiles = self._load_profiles()
 
         # MFCC параметры
         self.n_mfcc = 13
         self.hop_length = 512
-
-    # =========================
-    # LOAD/SAVE PROFILES
-    # =========================
-    def _load_profiles(self):
-        """Загрузка профилей голосов из JSON"""
-
-        profiles_file = os.path.join(self.db_path, "profiles.json")
-
-        if os.path.exists(profiles_file):
-            with open(profiles_file, "r") as f:
-                return json.load(f)
-
-        return {}
-
-    def _save_profiles(self):
-        """Сохранение профилей голосов"""
-
-        profiles_file = os.path.join(self.db_path, "profiles.json")
-
-        with open(profiles_file, "w") as f:
-            json.dump(self.voice_profiles, f, indent=2)
 
     # =========================
     # RECORD SAMPLE
@@ -152,18 +129,22 @@ class VoiceRecognizer:
         voice_profile = np.mean(all_features, axis=0)
         voice_std = np.std(all_features, axis=0)
 
-        # Сохранение профиля
-        profile_data = {
-            "user_id": user_id,
-            "profile": voice_profile.tolist(),
-            "std": voice_std.tolist(),
-            "samples": len(all_features),
-            "created_at": datetime.now().isoformat()
-        }
-
-        self.voice_profiles[str(user_id)] = profile_data
-
-        self._save_profiles()
+        # Сохранение профиля в БД
+        if self.voice_repo and self.db:
+            try:
+                self.voice_repo.update(
+                    user_id,
+                    voice_profile.tolist(),
+                    voice_std.tolist(),
+                    len(all_features)
+                )
+                print(f"[VOICE TRAIN] ✅ Saved to DB for user {user_id}")
+            except Exception as e:
+                print(f"[VOICE TRAIN DB ERROR] {e}")
+                return False
+        else:
+            print(f"[VOICE TRAIN WARNING] Database not available, cannot save profile")
+            return False
 
         print(f"[VOICE TRAIN] ✅ Trained speaker {user_id} on {len(all_features)} samples")
 
@@ -190,23 +171,37 @@ class VoiceRecognizer:
         if features is None:
             return None, 0
 
+        # Загрузка профилей из БД
+        if not self.voice_repo or not self.db:
+            print("[VOICE RECOGNITION] Database not available")
+            return None, 0
+
+        try:
+            all_profiles = self.voice_repo.get_all_profiles()
+        except Exception as e:
+            print(f"[VOICE RECOGNITION ERROR] {e}")
+            return None, 0
+
+        if not all_profiles:
+            print("[VOICE RECOGNITION] No profiles in database")
+            return None, 0
+
         best_match = None
         best_distance = float('inf')
 
         # Сравнение с каждым профилем
-        for user_id_str, profile in self.voice_profiles.items():
+        for profile in all_profiles:
 
-            user_id = int(user_id_str)
-            profile_features = np.array(profile["profile"])
+            profile_features = np.array(profile.profile_features)
 
             # Euclidean distance
             distance = euclidean(features, profile_features)
 
-            print(f"[VOICE MATCH] User {user_id}: distance={distance:.2f}")
+            print(f"[VOICE MATCH] User {profile.user_id}: distance={distance:.2f}")
 
             if distance < best_distance:
                 best_distance = distance
-                best_match = user_id
+                best_match = profile.user_id
 
         # Проверка порога
         if best_distance < threshold:
@@ -224,11 +219,13 @@ class VoiceRecognizer:
     def delete_profile(self, user_id):
         """Удаление профиля голоса пользователя"""
 
-        user_id_str = str(user_id)
+        if self.voice_repo:
+            try:
+                self.voice_repo.delete(user_id)
+                print(f"[VOICE] Deleted profile for user {user_id}")
+                return True
+            except Exception as e:
+                print(f"[VOICE DELETE ERROR] {e}")
+                return False
 
-        if user_id_str in self.voice_profiles:
-            del self.voice_profiles[user_id_str]
-            self._save_profiles()
-            print(f"[VOICE] Deleted profile for user {user_id}")
-
-        return True
+        return False

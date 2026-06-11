@@ -93,16 +93,34 @@ class VoiceProfile(Base):
     user_id = Column(
         Integer,
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
-    voice_file = Column(
-        String(255)
+    profile_features = Column(
+        JSON,
+        nullable=True
+    )
+
+    profile_std = Column(
+        JSON,
+        nullable=True
+    )
+
+    samples_count = Column(
+        Integer,
+        default=0
     )
 
     created_at = Column(
         DateTime,
         default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
     )
 
 

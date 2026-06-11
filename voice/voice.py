@@ -1,11 +1,22 @@
 import os
 import time
 import uuid
-import pygame
 import edge_tts
 import speech_recognition as sr
 import asyncio
 import numpy as np
+import subprocess
+import platform
+
+# Try to import pygame for audio playback
+PYGAME_AVAILABLE = False
+pygame = None
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+    print("[AUDIO] pygame available for audio playback")
+except ImportError:
+    print("[WARNING] pygame not available - using system audio playback")
 
 VOICE_RECOGNITION_AVAILABLE = False
 VoiceRecognizer = None
@@ -19,9 +30,18 @@ except ImportError:
 
 class NeuroVoice:
 
-    def __init__(self):
+    def __init__(self, db=None, voice_repo=None):
 
-        pygame.mixer.init()
+        # Initialize pygame mixer if available
+        if PYGAME_AVAILABLE:
+            try:
+                pygame.mixer.init()
+                print("[AUDIO] pygame mixer initialized")
+            except Exception as e:
+                print(f"[AUDIO WARNING] Could not initialize pygame mixer: {e}")
+                print("[AUDIO] Using system audio playback")
+        else:
+            print("[AUDIO] Using system audio playback (pygame not available)")
 
         self.recognizer = sr.Recognizer()
         self.recognizer.pause_threshold = 1.2
@@ -34,8 +54,34 @@ class NeuroVoice:
         # state lock (анти спам)
         self.is_listening = False
 
+        # Database connection
+        self.db = db
+        self.voice_repo = voice_repo
+
         # 🎤 Voice Recognition Engine (lazy load)
         self.voice_recognizer = None
+
+    # =====================================================
+    # SYSTEM AUDIO PLAYBACK (fallback)
+    # =====================================================
+    def _play_with_system(self, filename):
+        """Use system commands to play audio file"""
+        try:
+            if platform.system() == "Windows":
+                os.startfile(filename)
+                # Give system time to play the file
+                import mimetypes
+                # Rough estimate: wait for file to play
+                file_size = os.path.getsize(filename)
+                # Rough estimate: ~128kbps for mp3
+                estimated_duration = (file_size / (128 * 1024)) * 8
+                time.sleep(max(1, min(estimated_duration, 10)))
+            elif platform.system() == "Darwin":
+                subprocess.run(["afplay", filename], check=False)
+            else:  # Linux
+                subprocess.run(["mpg123", filename], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[AUDIO ERROR] System playback failed: {e}")
 
     # =====================================================
     # SPEAK (TTS FIXED + SAFE)
@@ -58,14 +104,24 @@ class NeuroVoice:
                 print("[VOICE ERROR] file not created")
                 return
 
-            pygame.mixer.music.load(filename)
-            pygame.mixer.music.play()
+            # Try pygame first if available
+            if PYGAME_AVAILABLE and pygame is not None:
+                try:
+                    pygame.mixer.music.load(filename)
+                    pygame.mixer.music.play()
 
-            # ✅ Wait for playback to finish
-            while pygame.mixer.music.get_busy():
-                time.sleep(0.1)
+                    # ✅ Wait for playback to finish
+                    while pygame.mixer.music.get_busy():
+                        time.sleep(0.1)
 
-            pygame.mixer.music.unload()
+                    pygame.mixer.music.unload()
+                except Exception as e:
+                    print(f"[AUDIO WARNING] pygame playback failed: {e}")
+                    print("[AUDIO] Falling back to system playback")
+                    self._play_with_system(filename)
+            else:
+                # Use system playback
+                self._play_with_system(filename)
 
             # 🔥 Windows file lock protection
             for _ in range(10):
@@ -152,6 +208,42 @@ class NeuroVoice:
             return None
 
     # =====================================================
+    # LISTEN WITH TIMEOUT (FOR NAME INPUT)
+    # =====================================================
+    def listen_once_with_timeout(self, timeout=5):
+        """
+        Слушание с заданным таймаутом (для ввода имени)
+        """
+
+        try:
+            with sr.Microphone() as source:
+
+                print(f"[VOICE] Listening for {timeout}s...")
+
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+
+                audio = self.recognizer.listen(source, timeout=timeout)
+
+                text = self.recognizer.recognize_google(
+                    audio,
+                    language="ru-RU"
+                )
+
+                print(f"[VOICE] Heard: {text}")
+
+                return text
+
+        except sr.UnknownValueError:
+            print("[VOICE] Could not understand audio")
+            return None
+        except sr.RequestError:
+            print("[VOICE] API error")
+            return None
+        except Exception as e:
+            print(f"[VOICE ERROR] {e}")
+            return None
+
+    # =====================================================
     # RECORD VOICE TRAINING (SPEAKER RECOGNITION)
     # =====================================================
     def record_voice_training(self, user_id, sample_count=5):
@@ -170,7 +262,10 @@ class NeuroVoice:
         # Lazy load VoiceRecognizer
         if self.voice_recognizer is None:
             from voice.voice_recognizer import VoiceRecognizer
-            self.voice_recognizer = VoiceRecognizer()
+            self.voice_recognizer = VoiceRecognizer(
+                db=self.db,
+                voice_repo=self.voice_repo
+            )
 
         print(f"[VOICE TRAINING] Starting recording {sample_count} samples...")
 

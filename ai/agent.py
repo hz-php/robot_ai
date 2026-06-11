@@ -1,5 +1,4 @@
 import threading
-import pygame
 import ollama
 import speech_recognition as sr
 
@@ -61,21 +60,48 @@ class AIAgent:
             return
 
         if "запомни меня" in t:
-            self.voice.speak("Начинаю обучение")
-            self.vision.status = "TRAINING..."
+            self.voice.speak("Спасибо! Как вас зовут?")
+            self.vision.status = "WAITING_NAME..."
 
-            def train():
+            def get_name():
                 try:
-                    self.vision.create_dataset(self.vision.session.current_user_id)
-                    self.voice.speak("Обучение завершено! Теперь я тебя узнаю")
+                    # Слушаем имя пользователя
+                    name = self.voice.listen_once_with_timeout(timeout=5)
+
+                    if not name or len(name.strip()) < 2:
+                        self.voice.speak("Не услышал имя, повторите пожалуйста")
+                        self.vision.status = "IDLE"
+                        self._finish()
+                        return
+
+                    name = name.strip()
+                    self.voice.speak(f"Хорошо, {name}! Начинаю обучение")
+                    self.vision.status = "TRAINING..."
+
+                    # Получаем ID пользователя
+                    user_id = self.vision.session.current_user_id
+                    
+                    # Обновляем имя в БД
+                    current_user = self.vision.user_repo.get_by_id(user_id)
+                    if current_user:
+                        current_user.name = name
+                        self.vision.db.commit()
+                        self.vision.session.current_name = name
+                        # Обновляем имя в Brain
+                        self.brain.set_username(name)
+
+                    # Обучаем лицо
+                    self.vision.create_dataset(user_id)
+                    self.voice.speak(f"Обучение завершено! Теперь я тебя узнаю, {name}")
+
                 except Exception as e:
-                    print(f"[TRAINING ERROR] {e}")
+                    print(f"[NAME ERROR] {e}")
                     self.voice.speak("Ошибка при обучении")
                 finally:
                     self.vision.status = "IDLE"
                     self._finish()
 
-            threading.Thread(target=train, daemon=True).start()
+            threading.Thread(target=get_name, daemon=True).start()
             return
 
         if "запомни мой голос" in t:
@@ -119,6 +145,11 @@ class AIAgent:
 
         # 🔥 UI STATUS
         self.vision.status = "THINKING..."
+
+        # Обновляем имя пользователя в Brain
+        current_name = self.vision.session.current_name
+        if current_name and current_name != "Unknown":
+            self.brain.set_username(current_name)
 
         self.history.append({
             "role": "user",
