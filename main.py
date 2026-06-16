@@ -48,10 +48,18 @@ def bootstrap():
     db = SessionLocal()
     users = UserRepository(db)
 
-    if not users.get_by_id(1):
-        users.create(name="Igor", role="ADMIN")
+    # Ищем пользователя именно по имени
+    admin = users.get_by_name("Igor")
 
-    return db
+    if not admin:
+        # Если его нет, создаем
+        admin = users.create(name="Igor", role="ADMIN")
+        print(f"[DB] Администратор {admin.name} создан с ID {admin.id}")
+    else:
+        print(f"[DB] Администратор {admin.name} найден в базе (ID: {admin.id})")
+
+    db.close() # Закрываем сессию после инициализации
+    return
 
 
 if __name__ == "__main__":

@@ -62,3 +62,5 @@ temp/
 # Environment variables
 .env
 .env.local
+face_model.yml
+config.py

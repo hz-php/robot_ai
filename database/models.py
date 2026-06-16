@@ -6,7 +6,8 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    JSON
+    JSON,
+    TIMESTAMP  # Добавили для точного соответствия структуре БД
 )
 
 from datetime import datetime
@@ -74,8 +75,17 @@ class FaceProfile(Base):
         unique=True
     )
 
+    # 🔥 ВОТ ЭТО ПОЛЕ МЫ ДОБАВИЛИ. Теперь SQLAlchemy знает про существование этой колонки в таблице!
+    model_path = Column(
+        String(255),
+        nullable=True,
+        default=None
+    )
+
+    # Привели к TIMESTAMP, как в phpMyAdmin
     created_at = Column(
-        DateTime,
+        TIMESTAMP,
+        nullable=True,
         default=datetime.utcnow
     )
 
