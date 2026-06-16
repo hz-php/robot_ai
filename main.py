@@ -12,14 +12,11 @@ from ai.tools.tool_router import ToolRouter
 
 
 def check_database():
-    """Проверка и инициализация БД"""
-    
+    """Проверка и инициализация структуры БД"""
     try:
         print("[DB] Checking database structure...")
-        
         db = SessionLocal()
         
-        # Проверяем существование нужных колонок в voice_profiles
         from sqlalchemy import text, inspect
         from database.db import engine
         
@@ -43,44 +40,37 @@ def check_database():
 
 
 def bootstrap():
-
-
+    """Проверка существования Администратора системы"""
     db = SessionLocal()
     users = UserRepository(db)
 
-    # Ищем пользователя именно по имени
     admin = users.get_by_name("Igor")
-
     if not admin:
-        # Если его нет, создаем
         admin = users.create(name="Igor", role="ADMIN")
         print(f"[DB] Администратор {admin.name} создан с ID {admin.id}")
     else:
         print(f"[DB] Администратор {admin.name} найден в базе (ID: {admin.id})")
 
-    db.close() # Закрываем сессию после инициализации
+    db.close()
     return
 
 
 if __name__ == "__main__":
 
-    # 🔍 Check database structure
+    # 🔍 Проверяем структуру базы данных
     if not check_database():
         print("[ERROR] Please run: python migration_voice_profiles.py")
         exit(1)
 
     bootstrap()
 
+    # Инициализация подсистем зрения и звука
     vision = CameraVision()
-    
-    # 🎤 Voice repository for database storage
     voice_repo = VoiceProfileRepository(vision.db)
-    
     voice = NeuroVoice(db=vision.db, voice_repo=voice_repo)
 
-    # Инициализация Brain с именем Unknown
-    brain = Brain(username="Unknown")
-
+    # Инициализация ИИ-компонентов
+    brain = Brain(username="Игорь")
     tools = ToolRouter(
         vision=vision,
         voice=voice,
@@ -89,33 +79,29 @@ if __name__ == "__main__":
         user_repo=vision.user_repo
     )
 
+    # Создаем агента Арчи
     agent = AIAgent(vision, voice, brain, tools)
 
+    # Связываем подсистему звука с методом обработки Агента
     voice.on_text = agent.handle
-    voice.start_background_listener()
+    
+    # Запускаем фоновый микрофон и сохраняем функцию отключения
+    agent.stop_listening_fn = voice.start_background_listener()
 
+    # Главный видео-цикл робота
     while True:
-
         if not vision.update():
             break
 
         frame = vision.current_frame
 
-        # 🔥 STATUS TEXT
-        # cv2.putText(
-        #     frame,
-        #     vision.status,
-        #     (20, 40),
-        #     cv2.FONT_HERSHEY_SIMPLEX,
-        #     1,
-        #     (0, 255, 255),
-        #     2
-        # )
+        # Вывод окна детекции на экран
+        cv2.imshow("ARCHIE AI AGENT v3.6", frame)
 
-        cv2.imshow("AI AGENT v1", frame)
-
+        # Выход по клавише ESC (код 27)
         if cv2.waitKey(1) == 27:
             break
 
+    # Корректное закрытие
     vision.release()
     cv2.destroyAllWindows()
