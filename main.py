@@ -48,7 +48,7 @@ def check_database():
 
 
 def bootstrap():
-    """Проверка существования Администратора системы"""
+    """Проверка существования Администратора systems"""
     db = SessionLocal()
     users = UserRepository(db)
 
@@ -87,11 +87,13 @@ if __name__ == "__main__":
         user_repo=vision.user_repo
     )
 
-    # Создаем агента Арчи
-    agent = AIAgent(vision, voice, brain, tools)
+    # 🛠️ ШАГ 1: Инициализируем железную плату РОБОТА ДО создания агента
+    # (так как у тебя COM6, Арчи бу
+    # дет слать команды управления через этот порт)
+    hardware = Hardware(ip="192.168.4.1")
 
-    # Инициализируем плату Arduino на COM6
-    hardware = Hardware(port="COM6")
+    # 🛠️ ШАГ 2: Создаем агента Арчи и передаем ему управление железом (robot=hardware)
+    agent = AIAgent(vision, voice, brain, tools, robot=hardware)
 
     # Обертка для микрофона, защищающая от одновременных вызовов
     def safe_voice_handle(text):
@@ -106,7 +108,7 @@ if __name__ == "__main__":
     # Запускаем фоновый микрофон и сохраняем функцию отключения
     agent.stop_listening_fn = voice.start_background_listener()
 
-    print("[SYSTEM] Робот запущен в интерактивном режиме. Жду голосовых команд...")
+    print("[SYSTEM] Робот запущен в интерактивном режиме. Арчи готов рулить и язвить...")
 
     # Главный видео-цикл робота
     while True:
@@ -119,7 +121,9 @@ if __name__ == "__main__":
         dist = hardware.distance()
         
         if dist is not None:
-            is_obstacle_near = (0 < dist < 15.0)
+            # 🛠️ ШАГ 3: Меняем порог безопасности на 35.0 см, чтобы соответствовать логике наката
+            STOP_DISTANCE = 35.0
+            is_obstacle_near = (0 < dist < STOP_DISTANCE)
             color = (0, 0, 255) if is_obstacle_near else (0, 255, 0)
             
             # Пишем статус дальномера на экран
@@ -127,22 +131,20 @@ if __name__ == "__main__":
             cv2.putText(frame, sonar_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
             
             if is_obstacle_near:
-                cv2.putText(
-                    frame, 
-                    "WARNING: OBSTACLE NEAR", 
-                    (20, 70), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.6, 
-                    (0, 0, 255), 
-                    2, 
-                    cv2.LINE_AA
-                )
+                    hardware.send_control(motor_speed=0, steer_state="center")
+                    cv2.putText(
+                        frame, 
+                        "WARNING: OBSTACLE NEAR ", 
+                        (20, 70), 
+                        cv2.FONT_HERSHEY_SIMPLEX,  # 4-й: Шрифт (теперь на месте)
+                        0.6,                       # 5-й: Масштаб
+                        (0, 0, 255),               # 6-й: Цвет BGR (Красный)
+                        2,                         # 7-й: Толщина линии
+                        cv2.LINE_AA                # 8-й: Сглаживание
+                    )
 
-        # Логика автоматического (проактивного) высказывания полностью УДАЛЕНА.
-        # Арчи больше не анализирует сенсоры в фоновом потоке самостоятельно.
-
-        # Вывод окна детекции на экран
-        cv2.imshow("ARCHIE AI AGENT v3.6", frame)
+        # Вывод окна детекции на экран (Обновили версию до 3.7)
+        cv2.imshow("ARCHIE AI AGENT v3.7 (Drive Integrated)", frame)
 
         # Выход по клавише ESC (код 27)
         if cv2.waitKey(1) == 27:
