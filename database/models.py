@@ -1,3 +1,9 @@
+"""
+ORM модели проекта Robot AI.
+
+Определяет структуру таблиц: пользователи, лица, голосовые профили, события.
+"""
+
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import (
     Column,
@@ -7,15 +13,26 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     JSON,
-    TIMESTAMP  # Добавили для точного соответствия структуре БД
+    TIMESTAMP
 )
-
 from datetime import datetime
 
+# Базовый класс для всех моделей
 Base = declarative_base()
 
 
 class User(Base):
+    """
+    Пользователь системы.
+    
+    Атрибуты:
+        id: Уникальный идентификатор
+        name: Имя пользователя
+        role: Роль (ADMIN, GUEST, OPERATOR)
+        active: Флаг активности
+        created_at: Дата создания
+        updated_at: Дата обновления
+    """
 
     __tablename__ = "users"
 
@@ -54,6 +71,16 @@ class User(Base):
 
 
 class FaceProfile(Base):
+    """
+    Профиль лица пользователя.
+    
+    Атрибуты:
+        id: Уникальный идентификатор
+        user_id: Ссылка на пользователя
+        face_label: Метка для LBPH распознавателя
+        model_path: Путь к модели (опционально)
+        created_at: Дата создания
+    """
 
     __tablename__ = "face_profiles"
 
@@ -75,14 +102,12 @@ class FaceProfile(Base):
         unique=True
     )
 
-    # 🔥 ВОТ ЭТО ПОЛЕ МЫ ДОБАВИЛИ. Теперь SQLAlchemy знает про существование этой колонки в таблице!
     model_path = Column(
         String(255),
         nullable=True,
         default=None
     )
 
-    # Привели к TIMESTAMP, как в phpMyAdmin
     created_at = Column(
         TIMESTAMP,
         nullable=True,
@@ -91,6 +116,18 @@ class FaceProfile(Base):
 
 
 class VoiceProfile(Base):
+    """
+    Голосовой профиль пользователя.
+    
+    Атрибуты:
+        id: Уникальный идентификатор
+        user_id: Ссылка на пользователя
+        profile_features: MFCC признаки голоса (JSON)
+        profile_std: Стандартные отклонения признаков (JSON)
+        samples_count: Количество записей для обучения
+        created_at: Дата создания
+        updated_at: Дата обновления
+    """
 
     __tablename__ = "voice_profiles"
 
@@ -135,6 +172,15 @@ class VoiceProfile(Base):
 
 
 class Event(Base):
+    """
+    Событие в системе.
+    
+    Атрибуты:
+        id: Уникальный идентификатор
+        event_type: Тип события
+        payload: Данные события (JSON)
+        created_at: Дата создания
+    """
 
     __tablename__ = "events"
 

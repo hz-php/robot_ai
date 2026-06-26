@@ -113,6 +113,7 @@ if __name__ == "__main__":
     # Главный видео-цикл робота
     while True:
         if not vision.update():
+            print("[CAMERA ERROR] Не удалось получить кадр с камеры! Цикл завершен.")
             break
 
         frame = vision.current_frame
