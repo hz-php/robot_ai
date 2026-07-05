@@ -25,17 +25,24 @@ class CameraVision:
         print(f"[DEBUG] OpenCV version: {cv2.__version__}")
         
         # Загрузка шрифта
-        self.font = ImageFont.load_default()
         try:
-            self.font = ImageFont.truetype("arial.ttf", 20)
-        except:
-            pass
+            # Ищем стандартный шрифт Ubuntu
+            self.font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+        except Exception:
+            try:
+                # Альтернативный путь для некоторых дистрибутивов
+                self.font = ImageFont.truetype("DejaVuSans.ttf", 18)
+            except Exception:
+                print("[VISION WARNING] Не удалось найти TrueType шрифт. Будет использован дефолтный (возможны проблемы с русским языком).")
+                self.font = ImageFont.load_default()
+        # 👆 КОНЕЦ ВСТАВКИ
 
         self.db = SessionLocal()
         self.user_repo = UserRepository(self.db)
         self.face_repo = FaceRepository(self.db)
 
-        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        #self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        self.cap = cv2.VideoCapture(0)
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         
         print("[VISION] Загрузка нейросети YOLOv8...")

@@ -1,3 +1,4 @@
+
 import serial
 import keyboard
 import time
@@ -27,5 +28,4 @@ while True:
 
     elif keyboard.is_pressed('esc'):
         break
-
 arduino.close()
