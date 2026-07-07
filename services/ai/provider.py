@@ -5,6 +5,7 @@ from services.ai.providers.groq_provider import GroqProvider
 from services.ai.providers.openai_provider import OpenAIProvider
 from services.ai.providers.openrouter_provider import OpenRouterProvider
 from services.ai.providers.qwen_provider import QwenAiProvider
+from services.ai.providers.claude_provider import ClaudeProvider
 
 
 def get_provider():
@@ -24,6 +25,8 @@ def get_provider():
     if AI_PROVIDER == "qwen":
         return QwenAiProvider()
     
+    if AI_PROVIDER == "claude":
+        return ClaudeProvider()
     
     raise Exception(
         f"Unknown AI_PROVIDER: {AI_PROVIDER}"

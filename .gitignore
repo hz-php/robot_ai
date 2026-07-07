@@ -25,6 +25,7 @@ pip-delete-this-directory.txt
 *~
 .DS_Store
 Thumbs.db
+.continue/
 
 # Project Data
 dataset/
@@ -58,6 +59,7 @@ ehthumbs.db
 *.swp
 .temp/
 temp/
+
 
 # Environment variables
 .env
